@@ -53,8 +53,15 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
         });
 
         wavesurfer.current.on('audioprocess', () => {
-          setCurrentTime(wavesurfer.current.getCurrentTime());
-          updateCurrentSyllable(wavesurfer.current.getCurrentTime());
+          const time = wavesurfer.current.getCurrentTime();
+          setCurrentTime(time);
+          updateCurrentSyllable(time);
+        });
+
+        wavesurfer.current.on('seek', () => {
+          const time = wavesurfer.current.getCurrentTime();
+          setCurrentTime(time);
+          updateCurrentSyllable(time);
         });
 
         wavesurfer.current.on('play', () => setIsPlaying(true));
@@ -62,6 +69,7 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
 
         return () => {
           if (wavesurfer.current) {
+            wavesurfer.current.pause();
             wavesurfer.current.destroy();
           }
           URL.revokeObjectURL(audioUrl);
@@ -71,6 +79,20 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
       }
     }
   }, [audioFile]);
+
+  // Separate effect for syllable updates to avoid stale closures
+  useEffect(() => {
+    if (wavesurfer.current && isPlaying) {
+      const interval = setInterval(() => {
+        if (wavesurfer.current && wavesurfer.current.isPlaying()) {
+          const time = wavesurfer.current.getCurrentTime();
+          updateCurrentSyllable(time);
+        }
+      }, 100);
+
+      return () => clearInterval(interval);
+    }
+  }, [isPlaying, syllables]);
 
   const updateCurrentSyllable = (time) => {
     const current = syllables.find(

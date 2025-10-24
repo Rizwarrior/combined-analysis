@@ -13,6 +13,7 @@ import {
   Pause as PauseIcon,
   VolumeUp as VolumeUpIcon,
   VolumeOff as VolumeOffIcon,
+  Repeat as RepeatIcon,
 } from '@mui/icons-material';
 import API_CONFIG from '../config';
 
@@ -39,6 +40,7 @@ const MultiTrackPlayer = ({ session_id }) => {
     bass: false,
     other: false
   });
+  const [isDragging, setIsDragging] = useState(false);
 
   const tracks = [
     { name: 'vocals', label: 'Vocals', icon: '🎤', color: '#4CAF50' },
@@ -47,71 +49,186 @@ const MultiTrackPlayer = ({ session_id }) => {
     { name: 'other', label: 'Other', icon: '🎸', color: '#9C27B0' }
   ];
 
+  const primaryTrack = 'vocals'; // Use vocals as primary track for sync
+
   useEffect(() => {
-    // Initialize audio elements
-    tracks.forEach(track => {
-      const audio = new Audio(`${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`);
-      audio.preload = 'metadata';
-      audioRefs.current[track.name] = audio;
+    let timeUpdateThrottle = null;
 
-      // Set initial volume
-      audio.volume = volumes[track.name];
-
-      // Update duration when metadata is loaded
-      audio.addEventListener('loadedmetadata', () => {
-        setDuration(Math.max(duration, audio.duration));
-      });
-
-      // Update current time
-      audio.addEventListener('timeupdate', () => {
-        setCurrentTime(audio.currentTime);
-      });
-
-      // Handle playback end
-      audio.addEventListener('ended', () => {
-        setIsPlaying(false);
-      });
-    });
-
-    return () => {
-      // Cleanup audio elements
+    const setupAudio = () => {
       tracks.forEach(track => {
-        if (audioRefs.current[track.name]) {
-          audioRefs.current[track.name].pause();
-          audioRefs.current[track.name] = null;
+        const audio = audioRefs.current[track.name];
+        if (audio) {
+          const handleLoadedMetadata = () => {
+            if (track.name === primaryTrack) {
+              setDuration(audio.duration);
+            }
+          };
+
+          const handleTimeUpdate = () => {
+            // Only update time from primary track and throttle updates
+            if (track.name === primaryTrack && !isDragging) {
+              if (timeUpdateThrottle) {
+                clearTimeout(timeUpdateThrottle);
+              }
+
+              timeUpdateThrottle = setTimeout(() => {
+                const currentAudio = audioRefs.current[track.name];
+                if (currentAudio && !isNaN(currentAudio.currentTime) && !isDragging) {
+                  setCurrentTime(currentAudio.currentTime);
+                }
+              }, 100);
+            }
+          };
+
+          const handleEnded = () => {
+            if (track.name === primaryTrack) {
+              setIsPlaying(false);
+            }
+          };
+
+          audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.addEventListener('timeupdate', handleTimeUpdate);
+          audio.addEventListener('ended', handleEnded);
+
+          // Set initial volume
+          audio.volume = volumes[track.name];
+
+          // If metadata already loaded
+          if (audio.duration && !isNaN(audio.duration) && track.name === primaryTrack) {
+            setDuration(audio.duration);
+          }
         }
       });
     };
-  }, [session_id]);
 
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      // Pause all tracks
-      tracks.forEach(track => {
-        if (audioRefs.current[track.name]) {
-          audioRefs.current[track.name].pause();
+    const timeoutId = setTimeout(setupAudio, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (timeUpdateThrottle) {
+        clearTimeout(timeUpdateThrottle);
+      }
+
+      // Cleanup: pause and remove all audio elements
+      Object.values(audioRefs.current).forEach(audio => {
+        if (audio) {
+          audio.pause();
         }
       });
-      setIsPlaying(false);
+    };
+  }, [session_id]); // Only re-setup when session_id changes
+
+  const togglePlayPause = async () => {
+    const newIsPlaying = !isPlaying;
+    setIsPlaying(newIsPlaying);
+
+    const audioElements = Object.values(audioRefs.current).filter(audio => audio && audio.readyState >= 2);
+
+    if (newIsPlaying) {
+      // Synchronize all tracks to primary track time
+      const primaryAudio = audioRefs.current[primaryTrack];
+      if (primaryAudio) {
+        const syncTime = primaryAudio.currentTime;
+
+        // Set all tracks to the same time
+        audioElements.forEach(audio => {
+          try {
+            if (Math.abs(audio.currentTime - syncTime) > 0.1) {
+              audio.currentTime = syncTime;
+            }
+          } catch (error) {
+            console.warn('Could not sync audio time:', error);
+          }
+        });
+
+        // Wait for sync
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // Start all tracks simultaneously
+      const playPromises = audioElements.map(audio => {
+        return audio.play().catch(error => {
+          console.warn('Could not start playback:', error);
+          return null;
+        });
+      });
+
+      try {
+        await Promise.all(playPromises);
+      } catch (error) {
+        console.warn('Some tracks failed to start:', error);
+      }
     } else {
-      // Play all tracks
-      tracks.forEach(track => {
-        if (audioRefs.current[track.name]) {
-          audioRefs.current[track.name].play();
-        }
+      // Pause all tracks
+      audioElements.forEach(audio => {
+        audio.pause();
       });
+    }
+  };
+
+  const restartSong = () => {
+    seekToTime(0);
+  };
+
+  const seekToTime = async (newTime) => {
+    const audioElements = Object.values(audioRefs.current).filter(audio => audio && audio.readyState >= 2);
+    const wasPlaying = isPlaying;
+
+    // Update displayed time immediately
+    setCurrentTime(newTime);
+
+    // Pause if playing
+    if (wasPlaying) {
+      audioElements.forEach(audio => audio.pause());
+      setIsPlaying(false);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Seek all tracks
+    audioElements.forEach(audio => {
+      try {
+        audio.currentTime = newTime;
+      } catch (error) {
+        console.warn('Could not set currentTime:', error);
+      }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Resume if was playing
+    if (wasPlaying) {
       setIsPlaying(true);
+      const playPromises = audioElements.map(audio => audio.play().catch(() => null));
+      Promise.all(playPromises).catch(() => {
+        audioElements.forEach(audio => audio.play().catch(console.error));
+      });
     }
   };
 
   const handleSeek = (event, newValue) => {
-    const seekTime = (newValue / 100) * duration;
-    tracks.forEach(track => {
-      if (audioRefs.current[track.name]) {
-        audioRefs.current[track.name].currentTime = seekTime;
-      }
-    });
-    setCurrentTime(seekTime);
+    if (!isDragging) {
+      const newTime = (newValue / 100) * duration;
+      seekToTime(newTime);
+    }
+  };
+
+  const handleSeekStart = () => {
+    setIsDragging(true);
+  };
+
+  const handleSeekEnd = (event, newValue) => {
+    setIsDragging(false);
+    const newTime = (newValue / 100) * duration;
+    setTimeout(() => {
+      seekToTime(newTime);
+    }, 10);
+  };
+
+  const handleSeekChange = (event, newValue) => {
+    // Update UI during drag
+    const newTime = (newValue / 100) * duration;
+    setCurrentTime(newTime);
   };
 
   const handleVolumeChange = (trackName, newValue) => {
@@ -131,6 +248,9 @@ const MultiTrackPlayer = ({ session_id }) => {
   };
 
   const formatTime = (seconds) => {
+    if (!seconds || !isFinite(seconds) || isNaN(seconds)) {
+      return '0:00';
+    }
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -149,7 +269,7 @@ const MultiTrackPlayer = ({ session_id }) => {
       <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <IconButton 
-            onClick={handlePlayPause} 
+            onClick={togglePlayPause} 
             color="primary" 
             size="large"
             sx={{ 
@@ -160,13 +280,24 @@ const MultiTrackPlayer = ({ session_id }) => {
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </IconButton>
 
+          <IconButton
+            onClick={restartSong}
+            color="default"
+            size="medium"
+            title="Restart"
+          >
+            <RepeatIcon />
+          </IconButton>
+
           <Typography variant="body2" sx={{ minWidth: 50 }}>
             {formatTime(currentTime)}
           </Typography>
 
           <Slider
             value={(currentTime / duration) * 100 || 0}
-            onChange={handleSeek}
+            onChange={handleSeekChange}
+            onChangeCommitted={handleSeekEnd}
+            onMouseDown={handleSeekStart}
             sx={{ flexGrow: 1 }}
             size="small"
           />
@@ -176,6 +307,17 @@ const MultiTrackPlayer = ({ session_id }) => {
           </Typography>
         </Stack>
       </Box>
+
+      {/* Audio elements (hidden) */}
+      {tracks.map(track => (
+        <audio
+          key={track.name}
+          ref={el => audioRefs.current[track.name] = el}
+          src={`${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`}
+          preload="auto"
+          crossOrigin="anonymous"
+        />
+      ))}
 
       {/* Individual Track Controls */}
       <Grid container spacing={2}>
@@ -257,4 +399,3 @@ const MultiTrackPlayer = ({ session_id }) => {
 };
 
 export default MultiTrackPlayer;
-
