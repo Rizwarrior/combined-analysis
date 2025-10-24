@@ -1,19 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
   IconButton,
   Slider,
+  Stack,
   Paper,
   Grid,
-  Stack,
+  Alert,
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   VolumeUp as VolumeUpIcon,
   VolumeOff as VolumeOffIcon,
-  Repeat as RepeatIcon,
+  GraphicEq as GraphicEqIcon,
 } from '@mui/icons-material';
 import API_CONFIG from '../config';
 
@@ -40,231 +41,109 @@ const MultiTrackPlayer = ({ session_id }) => {
     bass: false,
     other: false
   });
-  const [isDragging, setIsDragging] = useState(false);
   const [masterVolume, setMasterVolume] = useState(1.0);
-  const [loadingStates, setLoadingStates] = useState({
-    vocals: true,
-    drums: true,
-    bass: true,
-    other: true
-  });
 
   const tracks = [
     { name: 'vocals', label: 'Vocals', icon: '🎤', color: '#4CAF50' },
     { name: 'drums', label: 'Drums', icon: '🥁', color: '#FF5722' },
     { name: 'bass', label: 'Bass', icon: '🔊', color: '#2196F3' },
-    { name: 'other', label: 'Other', icon: '🎸', color: '#9C27B0' }
+    { name: 'other', label: 'Other', icon: '🎸', color: '#9C27B0' },
   ];
 
-  const primaryTrack = 'vocals'; // Use vocals as primary track for sync
-
   useEffect(() => {
-    let timeUpdateThrottle = null;
+    if (!session_id) return;
 
-    const setupAudio = () => {
+    // Initialize audio elements
+    tracks.forEach(track => {
+      const audio = new Audio();
+      audio.src = `${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`;
+      audio.volume = volumes[track.name] * masterVolume;
+      audio.muted = muted[track.name];
+      audioRefs.current[track.name] = audio;
+
+      // Set up event listeners
+      audio.addEventListener('loadedmetadata', () => {
+        if (track.name === 'vocals') {
+          setDuration(audio.duration);
+        }
+      });
+
+      audio.addEventListener('timeupdate', () => {
+        if (track.name === 'vocals') {
+          setCurrentTime(audio.currentTime);
+        }
+      });
+
+      audio.addEventListener('ended', () => {
+        if (track.name === 'vocals') {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }
+      });
+    });
+
+    // Cleanup
+    return () => {
       tracks.forEach(track => {
         const audio = audioRefs.current[track.name];
         if (audio) {
-          const handleLoadedMetadata = () => {
-            if (track.name === primaryTrack) {
-              setDuration(audio.duration);
-            }
-          };
-
-          const handleTimeUpdate = () => {
-            // Only update time from primary track and throttle updates
-            if (track.name === primaryTrack && !isDragging) {
-              if (timeUpdateThrottle) {
-                clearTimeout(timeUpdateThrottle);
-              }
-
-              timeUpdateThrottle = setTimeout(() => {
-                const currentAudio = audioRefs.current[track.name];
-                if (currentAudio && !isNaN(currentAudio.currentTime) && !isDragging) {
-                  setCurrentTime(currentAudio.currentTime);
-                }
-              }, 100);
-            }
-          };
-
-          const handleEnded = () => {
-            if (track.name === primaryTrack) {
-              setIsPlaying(false);
-            }
-          };
-
-          audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-          audio.addEventListener('timeupdate', handleTimeUpdate);
-          audio.addEventListener('ended', handleEnded);
-
-          // Set initial volume with master volume applied
-          audio.volume = volumes[track.name] * masterVolume;
-
-          // If metadata already loaded
-          if (audio.duration && !isNaN(audio.duration) && track.name === primaryTrack) {
-            setDuration(audio.duration);
-          }
-        }
-      });
-    };
-
-    const timeoutId = setTimeout(setupAudio, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (timeUpdateThrottle) {
-        clearTimeout(timeUpdateThrottle);
-      }
-
-      // Cleanup: pause and remove all audio elements
-      Object.values(audioRefs.current).forEach(audio => {
-        if (audio) {
           audio.pause();
+          audio.src = '';
         }
       });
     };
-  }, [session_id]); // Only re-setup when session_id changes
+  }, [session_id]);
 
-  const togglePlayPause = async () => {
+  // Update volumes when they change
+  useEffect(() => {
+    tracks.forEach(track => {
+      const audio = audioRefs.current[track.name];
+      if (audio) {
+        audio.volume = volumes[track.name] * masterVolume;
+        audio.muted = muted[track.name];
+      }
+    });
+  }, [volumes, muted, masterVolume]);
+
+  const togglePlayPause = () => {
     const newIsPlaying = !isPlaying;
     setIsPlaying(newIsPlaying);
 
-    const audioElements = Object.values(audioRefs.current).filter(audio => audio && audio.readyState >= 2);
-
-    if (newIsPlaying) {
-      // Synchronize all tracks to primary track time
-      const primaryAudio = audioRefs.current[primaryTrack];
-      if (primaryAudio) {
-        const syncTime = primaryAudio.currentTime;
-
-        // Set all tracks to the same time
-        audioElements.forEach(audio => {
-          try {
-            if (Math.abs(audio.currentTime - syncTime) > 0.1) {
-              audio.currentTime = syncTime;
-            }
-          } catch (error) {
-            console.warn('Could not sync audio time:', error);
-          }
-        });
-
-        // Wait for sync
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      // Start all tracks simultaneously
-      const playPromises = audioElements.map(audio => {
-        return audio.play().catch(error => {
-          console.warn('Could not start playback:', error);
-          return null;
-        });
-      });
-
-      try {
-        await Promise.all(playPromises);
-      } catch (error) {
-        console.warn('Some tracks failed to start:', error);
-      }
-    } else {
-      // Pause all tracks
-      audioElements.forEach(audio => {
-        audio.pause();
-      });
-    }
-  };
-
-  const restartSong = () => {
-    seekToTime(0);
-  };
-
-  const seekToTime = async (newTime) => {
-    const audioElements = Object.values(audioRefs.current).filter(audio => audio && audio.readyState >= 2);
-    const wasPlaying = isPlaying;
-
-    // Update displayed time immediately
-    setCurrentTime(newTime);
-
-    // Pause if playing
-    if (wasPlaying) {
-      audioElements.forEach(audio => audio.pause());
-      setIsPlaying(false);
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Seek all tracks
-    audioElements.forEach(audio => {
-      try {
-        audio.currentTime = newTime;
-      } catch (error) {
-        console.warn('Could not set currentTime:', error);
+    tracks.forEach(track => {
+      const audio = audioRefs.current[track.name];
+      if (audio) {
+        if (newIsPlaying) {
+          audio.play().catch(err => console.error(`Error playing ${track.name}:`, err));
+        } else {
+          audio.pause();
+        }
       }
     });
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Resume if was playing
-    if (wasPlaying) {
-      setIsPlaying(true);
-      const playPromises = audioElements.map(audio => audio.play().catch(() => null));
-      Promise.all(playPromises).catch(() => {
-        audioElements.forEach(audio => audio.play().catch(console.error));
-      });
-    }
   };
 
   const handleSeek = (event, newValue) => {
-    if (!isDragging) {
-      const newTime = (newValue / 100) * duration;
-      seekToTime(newTime);
-    }
-  };
-
-  const handleSeekStart = () => {
-    setIsDragging(true);
-  };
-
-  const handleSeekEnd = (event, newValue) => {
-    setIsDragging(false);
-    const newTime = (newValue / 100) * duration;
-    setTimeout(() => {
-      seekToTime(newTime);
-    }, 10);
-  };
-
-  const handleSeekChange = (event, newValue) => {
-    // Update UI during drag
     const newTime = (newValue / 100) * duration;
     setCurrentTime(newTime);
+    
+    tracks.forEach(track => {
+      const audio = audioRefs.current[track.name];
+      if (audio) {
+        audio.currentTime = newTime;
+      }
+    });
   };
 
   const handleVolumeChange = (trackName, newValue) => {
     const newVolume = newValue / 100;
     setVolumes(prev => ({ ...prev, [trackName]: newVolume }));
-    if (audioRefs.current[trackName]) {
-      audioRefs.current[trackName].volume = newVolume * masterVolume;
-    }
   };
 
   const handleMasterVolumeChange = (event, newValue) => {
-    const newMasterVolume = newValue / 100;
-    setMasterVolume(newMasterVolume);
-    
-    // Update all track volumes proportionally (respecting mute state)
-    tracks.forEach(track => {
-      const audio = audioRefs.current[track.name];
-      if (audio) {
-        audio.volume = volumes[track.name] * newMasterVolume;
-      }
-    });
+    setMasterVolume(newValue / 100);
   };
 
   const handleMuteToggle = (trackName) => {
-    const newMutedState = !muted[trackName];
-    setMuted(prev => ({ ...prev, [trackName]: newMutedState }));
-    if (audioRefs.current[trackName]) {
-      audioRefs.current[trackName].muted = newMutedState;
-    }
+    setMuted(prev => ({ ...prev, [trackName]: !prev[trackName] }));
   };
 
   const formatTime = (seconds) => {
@@ -276,10 +155,18 @@ const MultiTrackPlayer = ({ session_id }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  if (!session_id) {
+    return (
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Upload an audio file to get percussion analysis and separated stems.
+      </Alert>
+    );
+  }
+
   return (
-    <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.default', borderRadius: 2 }}>
-      <Typography variant="h6" gutterBottom>
-        Multi-Track Audio Player
+    <Paper elevation={3} sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <GraphicEqIcon /> Multi-Track Audio Player
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Play all 4 separated stems simultaneously with independent volume control
@@ -292,23 +179,12 @@ const MultiTrackPlayer = ({ session_id }) => {
             onClick={togglePlayPause} 
             color="primary" 
             size="large"
-            disabled={Object.values(loadingStates).some(loading => loading)}
             sx={{ 
               bgcolor: 'primary.light',
-              '&:hover': { bgcolor: 'primary.main', color: 'white' },
-              '&:disabled': { bgcolor: 'action.disabledBackground' }
+              '&:hover': { bgcolor: 'primary.main', color: 'white' }
             }}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
-          </IconButton>
-
-          <IconButton
-            onClick={restartSong}
-            color="default"
-            size="medium"
-            title="Restart"
-          >
-            <RepeatIcon />
           </IconButton>
 
           <Typography variant="body2" sx={{ minWidth: 50 }}>
@@ -317,9 +193,7 @@ const MultiTrackPlayer = ({ session_id }) => {
 
           <Slider
             value={(currentTime / duration) * 100 || 0}
-            onChange={handleSeekChange}
-            onChangeCommitted={handleSeekEnd}
-            onMouseDown={handleSeekStart}
+            onChange={handleSeek}
             sx={{ flexGrow: 1 }}
             size="small"
           />
@@ -362,97 +236,24 @@ const MultiTrackPlayer = ({ session_id }) => {
         </Box>
       </Box>
 
-      {/* Audio elements (hidden) */}
-      {tracks.map(track => (
-        <audio
-          key={track.name}
-          ref={el => audioRefs.current[track.name] = el}
-          src={`${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`}
-          preload="auto"
-          onLoadStart={() => {
-            console.log(`${track.name} started loading`);
-            setLoadingStates(prev => ({ ...prev, [track.name]: true }));
-          }}
-          onCanPlay={() => {
-            console.log(`${track.name} can start playing`);
-            setLoadingStates(prev => ({ ...prev, [track.name]: false }));
-          }}
-          onCanPlayThrough={() => {
-            console.log(`${track.name} fully loaded`);
-          }}
-          onProgress={(e) => {
-            const audio = e.target;
-            if (audio.buffered.length > 0) {
-              const buffered = audio.buffered.end(0) / audio.duration * 100;
-              console.log(`${track.name} buffered: ${buffered.toFixed(1)}%`);
-            }
-          }}
-          onError={(e) => {
-            console.error(`${track.name} failed to load`, e);
-            setLoadingStates(prev => ({ ...prev, [track.name]: false }));
-          }}
-        />
-      ))}
-
       {/* Individual Track Controls */}
       <Grid container spacing={2}>
         {tracks.map(track => (
           <Grid item xs={12} sm={6} key={track.name}>
             <Paper 
-              elevation={1}
+              variant="outlined" 
               sx={{ 
                 p: 2, 
-                borderRadius: 2,
-                borderLeft: '4px solid',
-                borderLeftColor: track.color,
+                borderRadius: 2, 
+                borderLeft: `5px solid ${track.color}`,
                 bgcolor: muted[track.name] ? 'action.hover' : 'background.paper',
                 transition: 'all 0.3s ease',
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {track.icon} {track.label}
-                  </Typography>
-                  {loadingStates[track.name] && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        px: 1,
-                        py: 0.25,
-                        bgcolor: 'warning.light',
-                        color: 'warning.dark',
-                        borderRadius: 1,
-                        fontWeight: 600,
-                        fontSize: '0.65rem'
-                      }}
-                    >
-                      ⏳ Loading...
-                    </Typography>
-                  )}
-                  {!loadingStates[track.name] && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        px: 1,
-                        py: 0.25,
-                        bgcolor: 'success.light',
-                        color: 'success.dark',
-                        borderRadius: 1,
-                        fontWeight: 600,
-                        fontSize: '0.65rem',
-                        animation: 'fadeOut 2s forwards',
-                        '@keyframes fadeOut': {
-                          '0%': { opacity: 1 },
-                          '80%': { opacity: 1 },
-                          '100%': { opacity: 0, display: 'none' }
-                        }
-                      }}
-                    >
-                      ✓ Ready
-                    </Typography>
-                  )}
-                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {track.icon} {track.label}
+                </Typography>
                 <IconButton
                   size="small"
                   onClick={() => handleMuteToggle(track.name)}
@@ -473,36 +274,28 @@ const MultiTrackPlayer = ({ session_id }) => {
                 <VolumeUpIcon 
                   fontSize="small" 
                   sx={{ 
-                    color: muted[track.name] ? 'text.disabled' : 'text.secondary' 
+                    color: muted[track.name] ? 'text.disabled' : track.color 
                   }} 
                 />
                 <Slider
                   value={volumes[track.name] * 100}
-                  onChange={(e, val) => handleVolumeChange(track.name, val)}
-                  disabled={muted[track.name]}
-                  sx={{ 
-                    flexGrow: 1,
-                    '& .MuiSlider-thumb': {
-                      bgcolor: track.color,
-                    },
-                    '& .MuiSlider-track': {
-                      bgcolor: track.color,
-                    },
-                    '& .MuiSlider-rail': {
-                      opacity: 0.3,
-                    }
-                  }}
+                  onChange={(e, newValue) => handleVolumeChange(track.name, newValue)}
+                  min={0}
+                  max={100}
+                  step={1}
                   size="small"
+                  sx={{ flexGrow: 1, color: track.color }}
+                  disabled={muted[track.name]}
                 />
                 <Typography 
                   variant="caption" 
                   sx={{ 
-                    minWidth: 35,
+                    minWidth: 35, 
                     color: muted[track.name] ? 'text.disabled' : 'text.secondary',
-                    fontWeight: 500
+                    fontWeight: 600
                   }}
                 >
-                  {muted[track.name] ? 'MUTE' : `${Math.round(volumes[track.name] * 100)}%`}
+                  {muted[track.name] ? 'Muted' : `${Math.round(volumes[track.name] * 100)}%`}
                 </Typography>
               </Box>
             </Paper>
