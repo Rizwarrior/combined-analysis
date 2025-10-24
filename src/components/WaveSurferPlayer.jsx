@@ -18,16 +18,20 @@ import WaveSurfer from 'wavesurfer.js';
 const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
   const waveformRef = useRef(null);
   const wavesurfer = useRef(null);
+  const syllablesRef = useRef(syllables); // Use ref to avoid recreating WaveSurfer
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.5);
   const [currentSyllable, setCurrentSyllable] = useState(null);
 
+  // Update syllables ref whenever syllables change (without reinitializing WaveSurfer)
   useEffect(() => {
-    console.log('WaveSurferPlayer: Syllables loaded:', syllables?.length || 0);
-    console.log('First few syllables:', syllables?.slice(0, 3));
-    
+    syllablesRef.current = syllables;
+    console.log('WaveSurferPlayer: Syllables updated:', syllables?.length || 0);
+  }, [syllables]);
+
+  useEffect(() => {
     if (waveformRef.current && audioFile) {
       try {
         // Initialize WaveSurfer
@@ -59,17 +63,19 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
           const time = wavesurfer.current.getCurrentTime();
           setCurrentTime(time);
           
-          // Update syllable inline to avoid stale closures
-          const current = syllables.find(
+          // Use ref to get current syllables (avoids stale closure without reinitializing)
+          const current = syllablesRef.current.find(
             (syl) => time >= syl.start && time <= syl.end
           );
           
-          // Only update if syllable actually changed (compare by start time to avoid unnecessary re-renders)
-          const currentChanged = current?.start !== currentSyllable?.start;
-          if (currentChanged) {
-            console.log('Current syllable changed:', current);
-            setCurrentSyllable(current);
-          }
+          setCurrentSyllable(prev => {
+            // Only update if syllable actually changed
+            if (prev?.start !== current?.start) {
+              console.log('Current syllable:', current);
+              return current || null;
+            }
+            return prev;
+          });
         });
 
         wavesurfer.current.on('seek', () => {
@@ -77,10 +83,10 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
           setCurrentTime(time);
           
           // Update syllable on seek
-          const current = syllables.find(
+          const current = syllablesRef.current.find(
             (syl) => time >= syl.start && time <= syl.end
           );
-          setCurrentSyllable(current);
+          setCurrentSyllable(current || null);
         });
 
         wavesurfer.current.on('play', () => setIsPlaying(true));
@@ -98,7 +104,7 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
         console.error('Error initializing WaveSurfer:', error);
       }
     }
-  }, [audioFile, syllables]); // Add syllables to dependencies so event handlers have latest data
+  }, [audioFile]); // Only reinitialize when audioFile changes
 
   const handlePlayPause = () => {
     if (wavesurfer.current) {
