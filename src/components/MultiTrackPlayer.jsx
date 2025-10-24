@@ -369,7 +369,6 @@ const MultiTrackPlayer = ({ session_id }) => {
           ref={el => audioRefs.current[track.name] = el}
           src={`${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`}
           preload="auto"
-          crossOrigin="anonymous"
           onLoadStart={() => {
             console.log(`${track.name} started loading`);
             setLoadingStates(prev => ({ ...prev, [track.name]: true }));
