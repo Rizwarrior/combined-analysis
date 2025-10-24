@@ -41,6 +41,13 @@ const MultiTrackPlayer = ({ session_id }) => {
     other: false
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [masterVolume, setMasterVolume] = useState(1.0);
+  const [loadingStates, setLoadingStates] = useState({
+    vocals: true,
+    drums: true,
+    bass: true,
+    other: true
+  });
 
   const tracks = [
     { name: 'vocals', label: 'Vocals', icon: '🎤', color: '#4CAF50' },
@@ -90,8 +97,8 @@ const MultiTrackPlayer = ({ session_id }) => {
           audio.addEventListener('timeupdate', handleTimeUpdate);
           audio.addEventListener('ended', handleEnded);
 
-          // Set initial volume
-          audio.volume = volumes[track.name];
+          // Set initial volume with master volume applied
+          audio.volume = volumes[track.name] * masterVolume;
 
           // If metadata already loaded
           if (audio.duration && !isNaN(audio.duration) && track.name === primaryTrack) {
@@ -235,8 +242,21 @@ const MultiTrackPlayer = ({ session_id }) => {
     const newVolume = newValue / 100;
     setVolumes(prev => ({ ...prev, [trackName]: newVolume }));
     if (audioRefs.current[trackName]) {
-      audioRefs.current[trackName].volume = newVolume;
+      audioRefs.current[trackName].volume = newVolume * masterVolume;
     }
+  };
+
+  const handleMasterVolumeChange = (event, newValue) => {
+    const newMasterVolume = newValue / 100;
+    setMasterVolume(newMasterVolume);
+    
+    // Update all track volumes proportionally (respecting mute state)
+    tracks.forEach(track => {
+      const audio = audioRefs.current[track.name];
+      if (audio) {
+        audio.volume = volumes[track.name] * newMasterVolume;
+      }
+    });
   };
 
   const handleMuteToggle = (trackName) => {
@@ -267,14 +287,16 @@ const MultiTrackPlayer = ({ session_id }) => {
 
       {/* Main Playback Controls */}
       <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
           <IconButton 
             onClick={togglePlayPause} 
             color="primary" 
             size="large"
+            disabled={Object.values(loadingStates).some(loading => loading)}
             sx={{ 
               bgcolor: 'primary.light',
-              '&:hover': { bgcolor: 'primary.main', color: 'white' }
+              '&:hover': { bgcolor: 'primary.main', color: 'white' },
+              '&:disabled': { bgcolor: 'action.disabledBackground' }
             }}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -306,6 +328,38 @@ const MultiTrackPlayer = ({ session_id }) => {
             {formatTime(duration)}
           </Typography>
         </Stack>
+
+        {/* Master Volume Control */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 1 }}>
+          <VolumeUpIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+          <Typography variant="caption" sx={{ minWidth: 80, fontWeight: 600 }}>
+            Master Volume
+          </Typography>
+          <Slider
+            value={masterVolume * 100}
+            onChange={handleMasterVolumeChange}
+            sx={{ 
+              flexGrow: 1,
+              '& .MuiSlider-thumb': {
+                bgcolor: 'primary.main',
+              },
+              '& .MuiSlider-track': {
+                bgcolor: 'primary.main',
+              },
+            }}
+            size="small"
+          />
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              minWidth: 35,
+              color: 'text.secondary',
+              fontWeight: 600
+            }}
+          >
+            {Math.round(masterVolume * 100)}%
+          </Typography>
+        </Box>
       </Box>
 
       {/* Audio elements (hidden) */}
@@ -316,6 +370,28 @@ const MultiTrackPlayer = ({ session_id }) => {
           src={`${API_CONFIG.PERC_API_URL}/api/download/${session_id}/${track.name}`}
           preload="auto"
           crossOrigin="anonymous"
+          onLoadStart={() => {
+            console.log(`${track.name} started loading`);
+            setLoadingStates(prev => ({ ...prev, [track.name]: true }));
+          }}
+          onCanPlay={() => {
+            console.log(`${track.name} can start playing`);
+            setLoadingStates(prev => ({ ...prev, [track.name]: false }));
+          }}
+          onCanPlayThrough={() => {
+            console.log(`${track.name} fully loaded`);
+          }}
+          onProgress={(e) => {
+            const audio = e.target;
+            if (audio.buffered.length > 0) {
+              const buffered = audio.buffered.end(0) / audio.duration * 100;
+              console.log(`${track.name} buffered: ${buffered.toFixed(1)}%`);
+            }
+          }}
+          onError={(e) => {
+            console.error(`${track.name} failed to load`, e);
+            setLoadingStates(prev => ({ ...prev, [track.name]: false }));
+          }}
         />
       ))}
 
@@ -335,9 +411,49 @@ const MultiTrackPlayer = ({ session_id }) => {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {track.icon} {track.label}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    {track.icon} {track.label}
+                  </Typography>
+                  {loadingStates[track.name] && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 1,
+                        py: 0.25,
+                        bgcolor: 'warning.light',
+                        color: 'warning.dark',
+                        borderRadius: 1,
+                        fontWeight: 600,
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      ⏳ Loading...
+                    </Typography>
+                  )}
+                  {!loadingStates[track.name] && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 1,
+                        py: 0.25,
+                        bgcolor: 'success.light',
+                        color: 'success.dark',
+                        borderRadius: 1,
+                        fontWeight: 600,
+                        fontSize: '0.65rem',
+                        animation: 'fadeOut 2s forwards',
+                        '@keyframes fadeOut': {
+                          '0%': { opacity: 1 },
+                          '80%': { opacity: 1 },
+                          '100%': { opacity: 0, display: 'none' }
+                        }
+                      }}
+                    >
+                      ✓ Ready
+                    </Typography>
+                  )}
+                </Box>
                 <IconButton
                   size="small"
                   onClick={() => handleMuteToggle(track.name)}
