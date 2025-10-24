@@ -1,7 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
-  // Combined backend URL (update after deploying to Modal)
-  COMBINED_API_URL: import.meta.env.VITE_COMBINED_API_URL || 'http://localhost:8000',
+  // Combined backend URL
+  COMBINED_API_URL: import.meta.env.VITE_COMBINED_API_URL || 'https://therealriz946--combined-audio-analysis-v1-fastapi-app.modal.run',
   
   // Direct access to individual services (for download links, etc.)
   VOCAL_API_URL: 'https://therealriz946--vocal-syllable-extractor-main-v2-fastapi-app.modal.run',
