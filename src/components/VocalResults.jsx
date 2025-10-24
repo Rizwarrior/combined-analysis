@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -12,15 +12,55 @@ import {
   Chip,
   TextField,
   InputAdornment,
+  Button,
 } from '@mui/material';
 import {
   Search as SearchIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
+import WaveSurferPlayer from './WaveSurferPlayer';
 
 export default function VocalResults({ data, audioFile }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredSyllables, setFilteredSyllables] = useState(data.syllables || []);
+
+  const handleDownloadJSON = () => {
+    const jsonData = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vocal-analysis-${data.song_info?.title || 'unknown'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadCSV = () => {
+    const csvContent = [
+      ['Syllable', 'Word', 'Start (s)', 'End (s)', 'Duration (s)', 'Confidence'].join(','),
+      ...(data.syllables || []).map(syl => [
+        syl.syllable,
+        syl.word,
+        syl.start.toFixed(3),
+        syl.end.toFixed(3),
+        (syl.end - syl.start).toFixed(3),
+        (syl.confidence * 100).toFixed(1) + '%'
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vocal-timestamps-${data.song_info?.title || 'unknown'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!searchTerm) {
@@ -37,6 +77,16 @@ export default function VocalResults({ data, audioFile }) {
 
   return (
     <Box>
+      {/* WaveSurfer Audio Player */}
+      {audioFile && (
+        <Box sx={{ mb: 3 }}>
+          <WaveSurferPlayer 
+            audioFile={audioFile} 
+            syllables={data.syllables || []} 
+          />
+        </Box>
+      )}
+
       {/* Song Info */}
       {data.song_info && data.song_info.identified && (
         <Box sx={{ mb: 3, p: 3, bgcolor: 'background.default', borderRadius: 2 }}>
@@ -54,9 +104,31 @@ export default function VocalResults({ data, audioFile }) {
 
       {/* Statistics */}
       <Box sx={{ mb: 3, p: 3, bgcolor: 'background.default', borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Analysis Statistics
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            Analysis Statistics
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadJSON}
+              sx={{ borderRadius: 2 }}
+            >
+              JSON
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadCSV}
+              sx={{ borderRadius: 2 }}
+            >
+              CSV
+            </Button>
+          </Box>
+        </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
           <Box>
             <Typography variant="body2" color="text.secondary">
