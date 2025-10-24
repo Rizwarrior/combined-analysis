@@ -17,7 +17,7 @@ import {
   KeyboardArrowUp as KeyboardArrowUpIcon,
   GitHub as GitHubIcon,
   MusicNote as MusicNoteIcon,
-  Drums as DrumsIcon,
+  Album as DrumsIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 

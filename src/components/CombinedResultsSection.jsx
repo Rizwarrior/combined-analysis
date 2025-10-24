@@ -17,7 +17,7 @@ import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   MusicNote as MusicNoteIcon,
-  Drums as DrumsIcon,
+  GraphicEq as DrumsIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material';
