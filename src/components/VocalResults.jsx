@@ -44,9 +44,9 @@ export default function VocalResults({ data, audioFile }) {
       ...(data.syllables || []).map(syl => [
         syl.syllable,
         syl.word,
-        syl.start.toFixed(3),
-        syl.end.toFixed(3),
-        (syl.end - syl.start).toFixed(3),
+        syl.start_time.toFixed(3),
+        syl.end_time.toFixed(3),
+        syl.duration.toFixed(3),
         (syl.confidence * 100).toFixed(1) + '%'
       ].join(','))
     ].join('\n');

@@ -65,12 +65,12 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
           
           // Use ref to get current syllables (avoids stale closure without reinitializing)
           const current = syllablesRef.current.find(
-            (syl) => time >= syl.start && time <= syl.end
+            (syl) => time >= syl.start_time && time <= syl.end_time
           );
           
           setCurrentSyllable(prev => {
             // Only update if syllable actually changed
-            if (prev?.start !== current?.start) {
+            if (prev?.start_time !== current?.start_time) {
               console.log('Current syllable:', current);
               return current || null;
             }
@@ -84,7 +84,7 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
           
           // Update syllable on seek
           const current = syllablesRef.current.find(
-            (syl) => time >= syl.start && time <= syl.end
+            (syl) => time >= syl.start_time && time <= syl.end_time
           );
           setCurrentSyllable(current || null);
         });
@@ -200,7 +200,7 @@ const WaveSurferPlayer = ({ audioFile, syllables = [] }) => {
         </Typography>
         {currentSyllable ? (
           <Chip
-            label={`"${currentSyllable.syllable}" (${currentSyllable.word}) - ${currentSyllable.start.toFixed(2)}s`}
+            label={`"${currentSyllable.syllable}" (${currentSyllable.word}) - ${currentSyllable.start_time.toFixed(2)}s`}
             color="primary"
             variant="outlined"
           />

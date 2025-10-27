@@ -56,11 +56,12 @@ const PercussionResults = ({ analysis, session_id }) => {
     other: { name: 'Other', color: '#2ecc71', icon: '🎹' }
   };
 
+  // Use combined backend as proxy to avoid CORS issues
   const tracks = session_id ? {
-    vocals: `${API_CONFIG.PERC_API_URL}/api/download/${session_id}/vocals`,
-    drums: `${API_CONFIG.PERC_API_URL}/api/download/${session_id}/drums`,
-    bass: `${API_CONFIG.PERC_API_URL}/api/download/${session_id}/bass`,
-    other: `${API_CONFIG.PERC_API_URL}/api/download/${session_id}/other`
+    vocals: `${API_CONFIG.COMBINED_API_URL}/api/download/${session_id}/vocals`,
+    drums: `${API_CONFIG.COMBINED_API_URL}/api/download/${session_id}/drums`,
+    bass: `${API_CONFIG.COMBINED_API_URL}/api/download/${session_id}/bass`,
+    other: `${API_CONFIG.COMBINED_API_URL}/api/download/${session_id}/other`
   } : {};
 
   // Setup audio elements
