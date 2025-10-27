@@ -194,7 +194,10 @@ export default function CombinedResultsSection({ results, onReset, audioFile }) 
             <VocalResults data={results.vocal_analysis.data} audioFile={audioFile} />
           )}
           {activeTab === 1 && percSuccess && (
-            <PercussionResults data={results.percussion_analysis.data} />
+            <PercussionResults 
+              analysis={results.percussion_analysis.data.analysis} 
+              session_id={results.percussion_analysis.data.session_id} 
+            />
           )}
         </Box>
       </Paper>
