@@ -68,6 +68,9 @@ export default function ProcessingSection({ processingData, onComplete, onReset 
       const response = await fetch(`${API_CONFIG.COMBINED_API_URL}/api/analyze`, {
         method: 'POST',
         mode: 'cors',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       });
 
