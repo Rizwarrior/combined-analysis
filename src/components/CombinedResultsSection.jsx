@@ -20,10 +20,12 @@ import {
   GraphicEq as DrumsIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
+  SportsEsports as ChartIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import VocalResults from './VocalResults';
 import PercussionResults from './PercussionResults';
+import ChartFileResults from './ChartFileResults';
 import API_CONFIG from '../config';
 
 export default function CombinedResultsSection({ results, onReset, audioFile }) {
@@ -187,6 +189,11 @@ export default function CombinedResultsSection({ results, onReset, audioFile }) 
             label="Percussion Results"
             disabled={!percSuccess}
           />
+          <Tab
+            icon={<ChartIcon />}
+            label="Chart File"
+            disabled={!vocalSuccess || !percSuccess}
+          />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
@@ -197,6 +204,13 @@ export default function CombinedResultsSection({ results, onReset, audioFile }) 
             <PercussionResults 
               analysis={results.percussion_analysis.data.analysis} 
               session_id={results.percussion_analysis.data.session_id} 
+            />
+          )}
+          {activeTab === 2 && vocalSuccess && percSuccess && (
+            <ChartFileResults 
+              vocalData={results.vocal_analysis.data}
+              percussionData={results.percussion_analysis.data}
+              audioFilename={audioFile?.name}
             />
           )}
         </Box>
