@@ -114,7 +114,7 @@ export default function ChartFileResults({ vocalData, percussionData, audioFilen
               sx={{ bgcolor: '#22c55e', color: 'white', fontWeight: 'bold', minWidth: 80 }}
             />
             <Typography variant="body2">
-              <strong>Green:</strong> Vocals/Syllables ({totalSyllables} notes)
+              <strong>Green:</strong> Vocals/Syllables (distributed ~{Math.ceil(totalSyllables / 3)} notes)
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -123,7 +123,7 @@ export default function ChartFileResults({ vocalData, percussionData, audioFilen
               sx={{ bgcolor: '#ef4444', color: 'white', fontWeight: 'bold', minWidth: 80 }}
             />
             <Typography variant="body2">
-              <strong>Red:</strong> Kick Drums
+              <strong>Red:</strong> Vocals/Syllables (distributed ~{Math.ceil(totalSyllables / 3)} notes)
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -132,7 +132,7 @@ export default function ChartFileResults({ vocalData, percussionData, audioFilen
               sx={{ bgcolor: '#eab308', color: 'white', fontWeight: 'bold', minWidth: 80 }}
             />
             <Typography variant="body2">
-              <strong>Yellow:</strong> Snare Drums
+              <strong>Yellow:</strong> Vocals/Syllables (distributed ~{Math.floor(totalSyllables / 3)} notes)
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -141,7 +141,7 @@ export default function ChartFileResults({ vocalData, percussionData, audioFilen
               sx={{ bgcolor: '#3b82f6', color: 'white', fontWeight: 'bold', minWidth: 80 }}
             />
             <Typography variant="body2">
-              <strong>Blue:</strong> Hi-hat/Cymbals
+              <strong>Blue:</strong> Kick Drums ({percussionData?.analysis?.kicks?.length || 0} notes)
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -150,7 +150,7 @@ export default function ChartFileResults({ vocalData, percussionData, audioFilen
               sx={{ bgcolor: '#f97316', color: 'white', fontWeight: 'bold', minWidth: 80 }}
             />
             <Typography variant="body2">
-              <strong>Orange:</strong> Toms/Other Percussion
+              <strong>Orange:</strong> Snare Drums ({percussionData?.analysis?.snares?.length || 0} notes)
             </Typography>
           </Box>
         </Stack>
