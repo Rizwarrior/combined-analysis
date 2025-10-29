@@ -206,7 +206,7 @@ function App() {
             color="text.secondary"
             align="center"
           >
-            © 2024 Combined Audio Analysis. Powered by WhisperX, Demucs, and Google Magenta.
+            © Thiiia
           </Typography>
         </Container>
       </Box>
