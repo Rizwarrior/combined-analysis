@@ -65,33 +65,66 @@ export default function ProcessingSection({ processingData, onComplete, onReset 
       // Step 1-4: Processing
       setActiveStep(1);
 
-      const response = await fetch(`${API_CONFIG.COMBINED_API_URL}/api/analyze`, {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        },
-        body: formData,
-      });
+      // Use AbortController for better timeout control
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minute timeout
 
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+      try {
+        const response = await fetch(`${API_CONFIG.COMBINED_API_URL}/api/analyze`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+          },
+          body: formData,
+          signal: controller.signal,
+          // Keep connection alive for long requests
+          keepalive: false,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unknown error');
+          throw new Error(`Server error (${response.status}): ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Step 5: Complete
+        setActiveStep(4);
+        setProgress(100);
+
+        // Delay to show completion
+        setTimeout(() => {
+          onComplete(result);
+        }, 1000);
+
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('Request timeout (15 minutes exceeded). This song might be too long or complex. Please try a shorter song.');
+        }
+        
+        throw fetchErr;
       }
-
-      const result = await response.json();
-
-      // Step 5: Complete
-      setActiveStep(4);
-      setProgress(100);
-
-      // Delay to show completion
-      setTimeout(() => {
-        onComplete(result);
-      }, 1000);
 
     } catch (err) {
       console.error('Processing error:', err);
-      setError(err.message);
+      
+      // Provide more helpful error messages
+      let errorMessage = err.message;
+      
+      if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+        errorMessage = 'Network error: Unable to reach the server. Please check your internet connection and try again.';
+      } else if (err.message.includes('429')) {
+        errorMessage = 'Rate limit exceeded. Please try again later.';
+      } else if (err.message.includes('500')) {
+        errorMessage = 'Server error: The analysis failed. Please try again or try a different audio file.';
+      }
+      
+      setError(errorMessage);
     }
   };
 
