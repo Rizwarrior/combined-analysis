@@ -67,7 +67,7 @@ export default function ProcessingSection({ processingData, onComplete, onReset 
 
       // Use AbortController for better timeout control
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 1200000); // 20 minute timeout
 
       try {
         const response = await fetch(`${API_CONFIG.COMBINED_API_URL}/api/analyze`, {
@@ -104,7 +104,7 @@ export default function ProcessingSection({ processingData, onComplete, onReset 
         clearTimeout(timeoutId);
         
         if (fetchErr.name === 'AbortError') {
-          throw new Error('Request timeout (15 minutes exceeded). This song might be too long or complex. Please try a shorter song.');
+          throw new Error('Request timeout (20 minutes exceeded). This song might be too long or complex. Please try a shorter song.');
         }
         
         throw fetchErr;
@@ -181,7 +181,7 @@ export default function ProcessingSection({ processingData, onComplete, onReset 
             Processing Your Audio
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            This may take 2-15 minutes depending on song length...
+            This may take 3-10 minutes for most songs (up to 20 minutes for very long songs)...
           </Typography>
         </Box>
 
