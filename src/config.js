@@ -5,7 +5,7 @@ export const API_CONFIG = {
   
   // Direct access to individual services (for download links, etc.)
   VOCAL_API_URL: 'https://therealriz946--vocal-syllable-extractor-main-v2-fastapi-app.modal.run',
-  PERC_API_URL: 'https://rizwankuwait--perc-analysis-backend-v3-fastapi-app.modal.run',
+  PERC_API_URL: 'https://therealriz946--perc-analysis-backend-v3-fastapi-app.modal.run',
 };
 
 export default API_CONFIG;
